@@ -43,8 +43,8 @@ var imageList = dataset.toList(dataset.size());
 
 // 添加真彩RGB图层和LST图层
 var addLayer = function(image, name) {
-  Map.addLayer(image, {bands: ['SR_B4', 'SR_B3', 'SR_B2'], min: 0, max: 65535, gamma: 2.0}, name + '_RGB');
-  Map.addLayer(image.select('LST'), {min: 20, max: 40, palette: ['blue', 'limegreen', 'yellow', 'darkorange', 'red']}, name + '_LST');
+  Map.addLayer(image, {bands: ['SR_B4', 'SR_B3', 'SR_B2'], min: 0, max: 65535, gamma: 2.0}, 'RGB_' + name);
+  Map.addLayer(image.select('LST'), {min: 20, max: 40, palette: ['blue', 'limegreen', 'yellow', 'darkorange', 'red']}, 'LST_' + name);
 };
 
 var evaluateFileName = function(image) {
