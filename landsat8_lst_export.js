@@ -6,7 +6,7 @@ var endDate = '2022-10-01';
 var path = 122;
 var row = 44;
 
-// 加载 Landsat 8 数据集
+// 加载 Landsat 8 数据集（Landsat 8 Level 2, Collection 2, Tier 1数据集）
 var dataset = ee.ImageCollection('LANDSAT/LC08/C02/T1_L2')
     .filterDate(startDate, endDate) // 过滤时间
     .filter(ee.Filter.eq('WRS_PATH', path)) // 过滤 Path
