@@ -44,10 +44,11 @@ var imageList = dataset.toList(dataset.size());
 for (var i = 0; i < imageList.size().getInfo(); i++) {
   var image = ee.Image(imageList.get(i));
   
-  // LST波段显示参数
-  var lstParams = {min: 0, max: 60, palette: ['black', 'white']};
-  // 添加LST图层
-  Map.addLayer(image.select('LST'), lstParams, image.get('LANDSAT_PRODUCT_ID').getInfo() + '_LST');
+  // 添加真彩RGB图层
   
+  Map.addLayer(image, {bands: ['SR_B4', 'SR_B3', 'SR_B2'], min: 0, max: 65535, gamma: 2.0}, 'True Color');
+  
+  // 打印图像元信息
+  print(image.getInfo());
   exportImages(image);
 }
