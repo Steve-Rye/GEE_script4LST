@@ -72,9 +72,11 @@ var endDate = '2008-10-01';
 // 注意：如果同时设置了includeMonths和excludeMonths，优先使用includeMonths
 var includeMonths = null; // 例如: [5, 6, 7]
 var excludeMonths = null; // 例如: [1, 2, 12]
+ 
 
-// 设置云量限制参数（0-100%）
-var cloudCoverThreshold = 100; // 默认值100表示不限制云量
+// 设置云量限制参数
+var cloudCoverMinThreshold = 0;    // 最小云量百分比（0-100），默认0表示不限制最小云量
+var cloudCoverMaxThreshold = 100;  // 最大云量百分比（0-100），默认100表示不限制最大云量
 
 // 设置条带号
 var path = 122;
@@ -123,12 +125,17 @@ if (includeMonths !== null && includeMonths.length > 0) {
   print('已排除月份:', excludeMonths);
 }
 
-// 按云量过滤
-dataset = dataset.filter(ee.Filter.lte('CLOUD_COVER', cloudCoverThreshold));
-print('云量阈值设置为:', cloudCoverThreshold + '%');
-print('符合条件的影像数量:', dataset.size());
+// 按云量范围过滤
+dataset = dataset
+  .filter(ee.Filter.gte('CLOUD_COVER', cloudCoverMinThreshold))
+  .filter(ee.Filter.lte('CLOUD_COVER', cloudCoverMaxThreshold));
+print('云量范围设置为:', cloudCoverMinThreshold + '% - ' + cloudCoverMaxThreshold + '%');
 
-// 计算地表温度的主要函数
+// 检查筛选结果
+var imageCount = dataset.size().getInfo();
+print('符合条件的影像数量:', imageCount);
+
+// 定义计算地表温度的主要函数
 // 包括：波段校正、NDVI计算、植被覆盖度计算、比辐射率计算、地表温度计算
 var calculateLST = function(image) {
   // 计算USGS提供的LST产品
@@ -175,57 +182,87 @@ var calculateLST = function(image) {
              .addBands(LST2.rename('LST2')); // 添加两种方法计算的地表温度结果
 };
 
-dataset = dataset.map(calculateLST);
-
-// 地图中心定位到数据集
-Map.centerObject(dataset);
-
-// 导出 LST 图像
-var exportImages = function(image) {
-  var fileName = image.get('LANDSAT_PRODUCT_ID');
-
-  // 导出LST
-  Export.image.toDrive({
-    image: image.select('LST'),
-    description: fileName.getInfo() + '_LST',
-    scale: 30,
-    region: image.geometry(),
-    maxPixels: 1e13
+// 检查是否有符合条件的影像
+if (imageCount === 0) {
+  // 没有符合条件的影像，显示警告信息
+  print('警告: 没有符合筛选条件的影像!');
+  print('请尝试放宽筛选条件，例如:');
+  print(' - 扩大时间范围');
+  print(' - 调整月份筛选设置');
+  print(' - 放宽云量限制');
+  print(' - 检查Path/Row设置');
+  
+  // 在地图上显示提示
+  var panel = ui.Panel({
+    style: {
+      position: 'top-center',
+      padding: '8px 15px',
+      width: '400px',
+      backgroundColor: 'rgba(255, 165, 0, 0.8)'  // 橙色背景带透明度
+    }
   });
+  
+  panel.add(ui.Label({
+    value: '⚠️ 警告: 没有符合筛选条件的影像!',
+    style: {fontWeight: 'bold', fontSize: '16px', margin: '2px 0'}
+  }));
+  
+  Map.add(panel);
+  
+} else {
+  // 有符合条件的影像，继续处理
+  dataset = dataset.map(calculateLST);
 
-  // 导出LST2
-  Export.image.toDrive({
-    image: image.select('LST2'),
-    description: fileName.getInfo() + '_LST2',
-    scale: 30,
-    region: image.geometry(),
-    maxPixels: 1e13
-  });
-};
+  // 地图中心定位到数据集
+  Map.centerObject(dataset);
 
-// 循环遍历并导出图像
-var imageList = dataset.toList(dataset.size());
+  // 导出 LST 图像
+  var exportImages = function(image) {
+    var fileName = image.get('LANDSAT_PRODUCT_ID');
 
-// 添加真彩RGB图层和LST图层
-var addLayer = function(image, name) {
-  // 添加RGB图层
-  Map.addLayer(image, {bands: ['SR_B3', 'SR_B2', 'SR_B1'], min: 0, max: 65535, gamma: 2.0}, 'RGB_' + name);
-  // 添加LST图层
-  Map.addLayer(image.select('LST'), {min: 20, max: 40, palette: ['blue', 'limegreen', 'yellow', 'darkorange', 'red']}, 'LST_' + name);
-  // 添加LST2图层
-  Map.addLayer(image.select('LST2'), {min: 20, max: 40, palette: ['blue', 'limegreen', 'yellow', 'darkorange', 'red']}, 'LST2_' + name);
-};
+    // 导出LST
+    Export.image.toDrive({
+      image: image.select('LST'),
+      description: fileName.getInfo() + '_LST',
+      scale: 30,
+      region: image.geometry(),
+      maxPixels: 1e13
+    });
 
-var evaluateFileName = function(image) {
-  var fileName = ee.String(image.get('LANDSAT_PRODUCT_ID'));
-  fileName.evaluate(function(name) {
-    addLayer(image, name);
-  });
-};
+    // 导出LST2
+    Export.image.toDrive({
+      image: image.select('LST2'),
+      description: fileName.getInfo() + '_LST2',
+      scale: 30,
+      region: image.geometry(),
+      maxPixels: 1e13
+    });
+}  ;
+
+  // 循环遍历并导出图像
+  var imageList = dataset.toList(dataset.size());
+
+  // 添加真彩RGB图层和LST图层
+  var addLayer = function(image, name) {
+    // 添加RGB图层
+    Map.addLayer(image, {bands: ['SR_B3', 'SR_B2', 'SR_B1'], min: 0, max: 65535, gamma: 2.0}, 'RGB_' + name);
+    // 添加LST图层
+    Map.addLayer(image.select('LST'), {min: 20, max: 40, palette: ['blue', 'limegreen', 'yellow', 'darkorange', 'red']}, 'LST_' + name);
+    // 添加LST2图层
+    Map.addLayer(image.select('LST2'), {min: 20, max: 40, palette: ['blue', 'limegreen', 'yellow', 'darkorange', 'red']}, 'LST2_' + name);
+  };
+
+  var evaluateFileName = function(image) {
+    var fileName = ee.String(image.get('LANDSAT_PRODUCT_ID'));
+    fileName.evaluate(function(name) {
+      addLayer(image, name);
+    });
+}  ;  
 
 for (var i = 0; i < imageList.size().getInfo(); i++) {
-  var image = ee.Image(imageList.get(i));
-  evaluateFileName(image);
-  print(image.getInfo()); // 打印图像元信息
-  exportImages(image);
+    var image = ee.Image(imageList.get(i));
+    evaluateFileName(image);
+    print(image.getInfo()); // 打印图像元信息
+    exportImages(image);
+  }
 }
