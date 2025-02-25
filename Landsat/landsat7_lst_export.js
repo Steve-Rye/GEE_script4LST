@@ -66,6 +66,16 @@
 var startDate = '2019-09-01';
 var endDate = '2019-10-01';
 
+// 月份过滤参数设置
+// 1. includeMonths: 指定要包含的月份数组，例如[5,6,7]表示只包含5、6、7月
+// 2. excludeMonths: 指定要排除的月份数组，例如[1,2,12]表示排除1、2、12月
+// 注意：如果同时设置了includeMonths和excludeMonths，优先使用includeMonths
+var includeMonths = null; // 例如: [5, 6, 7]
+var excludeMonths = null; // 例如: [1, 2, 12]
+
+// 设置云量限制参数（0-100%）
+var cloudCoverThreshold = 100; // 默认值100表示不限制云量
+
 // 设置条带号
 var path = 122;
 var row = 44;
@@ -75,6 +85,48 @@ var dataset = ee.ImageCollection('LANDSAT/LE07/C02/T1_L2')
     .filterDate(startDate, endDate) // 过滤时间
     .filter(ee.Filter.eq('WRS_PATH', path)) // 过滤 Path
     .filter(ee.Filter.eq('WRS_ROW', row));  // 过滤 Row
+
+// 按月份过滤
+if (includeMonths !== null && includeMonths.length > 0) {
+  // 创建包含指定月份的过滤器
+  var monthFilters = includeMonths.map(function(month) {
+    return ee.Filter.calendarRange(month, month, 'month');
+  });
+  
+  // 组合所有月份过滤器（OR关系）
+  var combinedFilter;
+  if (monthFilters.length === 1) {
+    combinedFilter = monthFilters[0];
+  } else {
+    combinedFilter = ee.Filter.or.apply(null, monthFilters);
+  }
+  
+  // 应用月份过滤器
+  dataset = dataset.filter(combinedFilter);
+  print('已筛选包含月份:', includeMonths);
+} else if (excludeMonths !== null && excludeMonths.length > 0) {
+  // 创建排除指定月份的过滤器
+  var monthFilters = excludeMonths.map(function(month) {
+    return ee.Filter.calendarRange(month, month, 'month');
+  });
+  
+  // 组合所有月份过滤器（OR关系）
+  var combinedFilter;
+  if (monthFilters.length === 1) {
+    combinedFilter = monthFilters[0];
+  } else {
+    combinedFilter = ee.Filter.or.apply(null, monthFilters);
+  }
+  
+  // 应用排除月份过滤器（NOT）
+  dataset = dataset.filter(combinedFilter.not());
+  print('已排除月份:', excludeMonths);
+}
+
+// 按云量过滤
+dataset = dataset.filter(ee.Filter.lte('CLOUD_COVER', cloudCoverThreshold));
+print('云量阈值设置为:', cloudCoverThreshold + '%');
+print('符合条件的影像数量:', dataset.size());
 
 // 计算地表温度的主要函数
 // 包括：波段校正、NDVI计算、植被覆盖度计算、比辐射率计算、地表温度计算
